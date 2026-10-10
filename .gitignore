@@ -1,0 +1,36 @@
+
+# Environment variables and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+keystore/
+secrets/
+
+# Foundry generated files
+out/
+cache/
+broadcast/
+
+# Dependencies and build outputs
+node_modules/
+artifacts/
+bin/
+obj/
+
+# Editor and operating system files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+# Local tool state and deployment artifacts
+.grok/
+.vercel/
+.node_modules.lock
+
+# Local logs and temporary files
+*.log
+npm-debug.log*

@@ -1,0 +1,36 @@
+{
+  "url": "http://127.0.0.1:8080/architecture",
+  "viewports": {
+    "desktop": {
+      "width": 1280,
+      "height": 800,
+      "status": 200,
+      "title": "Mandate",
+      "hasCanvas": false,
+      "bodyTextLen": 3184,
+      "bodyTextHash": "8f1b8959490163289250472dd0f82aa20b71bbd7f8e76116cc395c514b6e0a91",
+      "bodyTextPrefix": "M Mandate TEMPO Overview Console Architecture Submission TECHNIC",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/arch-smoke.png"
+    },
+    "mobile": {
+      "width": 390,
+      "height": 844,
+      "status": 200,
+      "title": "Mandate",
+      "hasCanvas": false,
+      "bodyTextLen": 3178,
+      "bodyTextHash": "efe18f0c2a518c62bf791048f4090ab5a018007af923c44d1595a1b1c4b3271f",
+      "bodyTextPrefix": "M Mandate Overview Console Architecture Submission TECHNICAL DES",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/arch-smoke-mobile.png"
+    }
+  },
+  "brandWarnings": [],
+  "authWarnings": [],
+  "verdictFile": "/workspace/screenshots/arch-smoke.json"
+}

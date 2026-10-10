@@ -1,0 +1,36 @@
+{
+  "url": "http://127.0.0.1:8080/",
+  "viewports": {
+    "desktop": {
+      "width": 1280,
+      "height": 800,
+      "status": 200,
+      "title": "Mandate",
+      "hasCanvas": false,
+      "bodyTextLen": 1674,
+      "bodyTextHash": "33ea2cdabc06951273c81c156289dc6c4f224f0873f869a916f7aacd899eb41a",
+      "bodyTextPrefix": "M Mandate TEMPO Overview Console Architecture Submission CRYPTO ",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/app-builder-preview.png"
+    },
+    "mobile": {
+      "width": 390,
+      "height": 844,
+      "status": 200,
+      "title": "Mandate",
+      "hasCanvas": false,
+      "bodyTextLen": 1668,
+      "bodyTextHash": "14cfa2184ccd9e8e0332ced31bc58b216b8c13dc82d1b3241f0f4c8ec4b4aae6",
+      "bodyTextPrefix": "M Mandate Overview Console Architecture Submission CRYPTO WORLD'",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/app-builder-preview-mobile.png"
+    }
+  },
+  "brandWarnings": [],
+  "authWarnings": [],
+  "verdictFile": "/workspace/screenshots/app-builder-preview.json"
+}

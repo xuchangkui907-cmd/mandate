@@ -1,0 +1,36 @@
+{
+  "url": "http://127.0.0.1:8080/console",
+  "viewports": {
+    "desktop": {
+      "width": 1280,
+      "height": 800,
+      "status": 200,
+      "title": "Mandate",
+      "hasCanvas": false,
+      "bodyTextLen": 1136,
+      "bodyTextHash": "0183ed2645ee170abf4673b1ebc5f89dd01596b34c593a8eea009542f1f02642",
+      "bodyTextPrefix": "M Mandate TEMPO Overview Console Architecture Submission NORTHWI",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/console-smoke.png"
+    },
+    "mobile": {
+      "width": 390,
+      "height": 844,
+      "status": 200,
+      "title": "Mandate",
+      "hasCanvas": false,
+      "bodyTextLen": 1130,
+      "bodyTextHash": "6b76f53912b85cc57c1cd57788ed6035f0dd4948ea55882214fe6971e4ba6773",
+      "bodyTextPrefix": "M Mandate Overview Console Architecture Submission NORTHWIND LAB",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/console-smoke-mobile.png"
+    }
+  },
+  "brandWarnings": [],
+  "authWarnings": [],
+  "verdictFile": "/workspace/screenshots/console-smoke.json"
+}
