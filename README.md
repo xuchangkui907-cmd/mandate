@@ -1,7 +1,6 @@
-
 # Mandate
 
-**Policy wallets for the agent economy, built on Tempo.**
+**Policy Wallets for the Agent Economy, Built on Tempo.**
 
 Mandate gives companies programmable spending controls for AI agents. Finance funds and governs a shared treasury; agents receive narrowly scoped spending authority instead of holding company treasury keys.
 
@@ -9,22 +8,91 @@ Built for the [Crypto World's Fair](https://colosseum.com/worldsfair) Tempo trac
 
 > Mandate lets AI agents pay APIs while enforcing finance-defined spending limits, merchant permissions, and rate limits on-chain.
 
-## Project status
+## Project Status
 
-Mandate has two distinct execution environments:
+Mandate combines an on-chain spending-policy contract with an HTTP 402 Machine Payments Protocol (MPP) merchant integration and a protected Relayer.
 
 | Component | Status | Description |
 |---|---|---|
-| Browser finance console | Demo / simulation | Explore treasury policies, mandates, agent behavior, and failure paths without a wallet |
-| Solidity MandateBook V2 | Deployed | Deployed to Tempo Moderato testnet |
-| MPP merchant endpoints | Deployed; HTTP 402 challenge verified | Helios and Atlas return payment challenges |
-| Relayer GET API | Deployed; read-only verified | Reads live V2 contract state |
-| Relayer POST API | Implemented | Can submit a real on-chain payment for a valid MPP challenge |
-| Complete production payment E2E | Not yet fully verified | A complete real payment through the production API, followed by a successful paid-resource response, has not yet been confirmed |
+| Browser finance console | Demo / simulation | Explore treasury policies, mandates, agent behavior, and failure paths |
+| Solidity MandateBook V2 | Deployed | Deployed on Tempo Moderato testnet |
+| MPP merchant endpoints | Deployed and tested | Helios and Atlas HTTP 402 payment challenges |
+| Relayer GET API | Deployed and verified | Reads live V2 contract state |
+| Relayer POST API | Deployed and tested | Submits real on-chain payments for valid MPP challenges |
+| Helios payment E2E | Verified, 2026-11-25 | Real payment, on-chain settlement verification, HTTP 200 paid-resource delivery, and Payment-Receipt |
 
-The browser console is not a live on-chain finance dashboard. Its simulated state is separate from the deployed V2 contract and production API.
+The browser console is a demonstration environment. Its simulated state is separate from the deployed V2 contract and production API.
 
-A deployed API implementation is not proof that a real payment has successfully settled. The payment E2E status above is intentionally conservative.
+The verified payment E2E below was executed on Tempo Moderato testnet. It is not a browser simulation and does not imply Tempo Mainnet deployment or production-scale reliability.
+
+## Verified Helios Payment E2E
+
+A complete Helios payment flow was successfully verified on Tempo Moderato testnet on 2026-11-25.
+
+The test covered:
+
+1. Creating a real Helios MPP payment challenge.
+2. Validating the challenge configuration.
+3. Submitting a real on-chain payment through the Relayer.
+4. Waiting for transaction confirmation.
+5. Verifying the transaction receipt and settlement.
+6. Submitting the payment authorization to the merchant endpoint.
+7. Verifying the matching challenge and on-chain payment.
+8. Returning the protected resource with HTTP 200 and a Payment-Receipt header.
+
+### Transaction Evidence
+
+| Evidence | Result |
+|---|---|
+| Resource | Helios Research API |
+| Challenge ID | `mpp_helios_be298a956bb84b3784daf568be912ce6` |
+| Challenge memo | `0x39ea9180b9768bb8bee9f0702225044e12ec162930436a499289da5da27843cc` |
+| Chain | Tempo Moderato |
+| Chain ID | `42431` |
+| Mandate ID | `1` |
+| Contract | `0x3F0AA3335d9CE2E6dc7e51d32880471f0d08B9De` |
+| Spender | `0x62b091fA422e3F6fF9420aB76c2253d04C449E74` |
+| Merchant | `0x0253F2c64145E9CBB605Be8cbFc99B08E2E55438` |
+| Token | Moderato pathUSD |
+| Amount | `0.40 PATH_USD` |
+| Base units | `400000` |
+| Relayer response | HTTP `200` |
+| Relayer outcome | `confirmed` |
+| Reverted | `false` |
+| Transaction hash | `0x67806d9bdfc2ebab0d3458c72202d411e94544428b4adb82852159db13ffe4a6` |
+| Block | `45864838` |
+| Gas used | `333934` |
+| Merchant response | HTTP `200` |
+| Payment-Receipt | Returned successfully |
+| Settlement | `ok: true` |
+
+[View the successful payment on Tempo Explorer](https://explore.testnet.tempo.xyz/tx/0x67806d9bdfc2ebab0d3458c72202d411e94544428b4adb82852159db13ffe4a6)
+
+### Delivered Resource
+
+The merchant returned the protected Helios Research API resource:
+
+```json
+{
+  "signal": "SOL/USDC orderbook imbalance +2.4 sigma",
+  "confidence": 0.91,
+  "source": "Helios Live Feed"
+}
+```
+
+The merchant also returned a `Payment-Receipt` header containing:
+
+- Payment method: `tempo`
+- Chain ID: `42431`
+- Confirmed transaction hash
+- Block number: `45864838`
+- Matching challenge ID
+
+The merchant's successful response establishes that the tested payment was not merely submitted on-chain: the corresponding paid resource was also delivered.
+
+An earlier test transaction on the same date was confirmed on-chain, but its subsequent merchant verification request arrived after the five-minute challenge expiry. It did not deliver the resource and is not counted as a successful E2E.
+
+This evidence establishes the tested Helios path only. It does not establish Tempo Mainnet deployment, production-scale reliability, independent customer adoption, or successful E2E for every merchant/resource.
 
 ## Architecture
 
@@ -86,11 +154,15 @@ A deployed API implementation is not proof that a real payment has successfully 
                   HTTP 200 + paid resource
 ```
 
-The on-chain contract is the authoritative spending-policy enforcement layer. The server-side MPP integration creates payment challenges and verifies settlement. The Relayer can submit the on-chain payment using its configured server-side account.
+The on-chain contract is the authoritative spending-policy enforcement layer.
 
-## Try the browser demo
+The server-side MPP integration creates payment challenges and verifies settlement. The Relayer can submit on-chain payments using its configured server-side account.
 
-Requires Node.js 20 or newer.
+## Try the Browser Demo
+
+Requirements:
+
+- Node.js 20 or newer
 
 ```bash
 npm install
@@ -105,9 +177,9 @@ http://127.0.0.1:8080/console
 
 Click **Run judge walkthrough**.
 
-The walkthrough demonstrates the policy enforcement flow:
+The walkthrough demonstrates:
 
-1. Finance has issued a sample Mandate #1.
+1. Finance issues a sample Mandate #1.
 2. Helios requests a $0.40 research brief.
 3. The request returns HTTP 402.
 4. An unapproved merchant is rejected by the policy.
@@ -127,9 +199,9 @@ Other pages:
 
 The console keeps demo state in memory. Refreshing the page resets the simulation.
 
-## Live Tempo deployment
+## Live Tempo Deployment
 
-### Network
+### Tempo Moderato Testnet
 
 | Property | Value |
 |---|---|
@@ -150,7 +222,7 @@ Tempo Mainnet is a separate network:
 | RPC | `https://rpc.tempo.xyz` |
 | Explorer | [Tempo Mainnet Explorer](https://explore.tempo.xyz) |
 
-**The current Mandate V2 deployment described below is on Moderato testnet, not Tempo Mainnet.**
+**The current Mandate V2 deployment is on Moderato testnet, not Tempo Mainnet.**
 
 ### MandateBook V2
 
@@ -166,46 +238,49 @@ Tempo Mainnet is a separate network:
 
 [View MandateBook V2 on Tempo Explorer](https://explore.testnet.tempo.xyz/address/0x3F0AA3335d9CE2E6dc7e51d32880471f0d08B9De)
 
-### V2 operational addresses
+### V2 Operational Addresses
 
 | Role | Address |
 |---|---|
-| Finance / Treasury wallet | `0x0253F2c64145eC9BB605Be8cbFc99B08E2E55438` |
-| Authorized Relayer / Agent spender | `0x62b091fA422e3F6fF9420aB76c2253d04C449e74` |
+| Finance / Treasury wallet | `0x0253F2c64145E9CBB605Be8cbFc99B08E2E55438` |
+| Authorized Relayer / Agent spender | `0x62b091fA422e3F6fF9420aB76c2253d04C449E74` |
 
 The Helios and Atlas merchant integrations currently share the same finance wallet address. Consequently, Mandate #1 has one unique merchant allowlist entry.
 
-No private keys, wallet secrets, or API credentials are included in this repository documentation.
+No private keys, wallet secrets, or API credentials are included in this documentation.
 
-## Mandate #1 — deployed policy
+## Mandate #1 — Deployed Policy
 
 Mandate #1 is configured on the V2 contract.
 
-| Parameter | On-chain value |
+| Parameter | Configured value |
 |---|---:|
 | Mandate ID | `1` |
 | Token | pathUSD |
-| Spender | `0x62b091fA422e3F6fF9420aB76c2253d04C449e74` |
-| Lifetime spending cap | 100 PATH_USD |
-| Remaining allowance | 100 PATH_USD |
-| Maximum per transaction | 1 PATH_USD |
+| Spender | `0x62b091fA422e3F6fF9420aB76c2253d04C449E74` |
+| Initial lifetime spending cap | 100 PATH_USD |
+| Initial maximum per transaction | 1 PATH_USD |
 | Rate limit | 5 PATH_USD |
 | Rate-limit window | 3600 seconds |
-| Merchant allowlist entries | 1 |
-| Paused | `false` |
-| Closed | `false` |
+| Merchant allowlist entries | 1 unique wallet |
+| Paused | `false` at the recorded configuration check |
+| Closed | `false` at the recorded configuration check |
 | Department hash | `0xb77bf3b810235a918879a4b239ef948ceff141ffc95e62ec01430ae43fd45f07` |
 
-The V2 treasury was funded with 200 PATH_USD.
+The V2 treasury was initially funded with 200 PATH_USD.
 
-At the time of the production read-only verification:
+The earlier read-only verification recorded:
 
-- 100 PATH_USD was reserved by Mandate #1.
-- 100 PATH_USD remained unencumbered.
-- Mandate #1 had spent 0 PATH_USD.
-- The mandate was neither paused nor closed.
+- 100 PATH_USD reserved by Mandate #1.
+- 100 PATH_USD unencumbered.
+- 0 PATH_USD spent at that time.
+- Mandate #1 neither paused nor closed.
 
-Amounts are expressed in pathUSD, which uses 6 decimal places.
+The successful Helios payment documented above subsequently spent 0.40 PATH_USD. A separate earlier test payment was also confirmed on-chain for 0.40 PATH_USD, although its merchant challenge expired before resource delivery.
+
+Therefore, the earlier 100 PATH_USD remaining figure is historical and must not be treated as the current live allowance.
+
+Amounts use pathUSD's 6 decimal places:
 
 ```text
 1 PATH_USD    = 1000000 base units
@@ -213,9 +288,9 @@ Amounts are expressed in pathUSD, which uses 6 decimal places.
 0.08 PATH_USD =   80000 base units
 ```
 
-These figures describe the state at the time of verification. They are not a guarantee that the live balances remain unchanged.
+For current balances and allowance, query the protected Relayer GET endpoint or the deployed contract.
 
-## On-chain permission model
+## On-Chain Permission Model
 
 MandateBook V2 separates ownership, treasury administration, policy administration, and emergency control.
 
@@ -236,9 +311,9 @@ Important permission boundaries:
 - An emergency guardian can pause but cannot unpause unless it also has policy-operator permission.
 - The owner can manage delegated roles; delegated permissions are distinct from the mandate's spender permission.
 
-The contract uses role checks on privileged operations. Do not treat the browser demo's simulated roles as proof of the deployed contract's current role assignments.
+Do not treat the browser demo's simulated roles as proof of the deployed contract's current role assignments.
 
-## MPP merchant endpoints
+## MPP Merchant Endpoints
 
 The deployed server exposes separate MPP payment endpoints for Helios and Atlas.
 
@@ -263,23 +338,23 @@ Replace `YOUR_HOST` with the actual deployed hostname.
 
 The challenge identifies the configured Tempo network, V2 contract, mandate, spender, merchant, token, amount, challenge ID, and memo.
 
-The expected challenge configuration is:
+Expected challenge configuration:
 
 | Field | Value |
 |---|---|
 | Chain ID | `42431` |
 | Mandate ID | `1` |
 | Contract | `0x3F0AA3335d9CE2E6dc7e51d32880471f0d08B9De` |
-| Spender | `0x62b091fA422e3F6fF9420aB76c2253d04C449e74` |
+| Spender | `0x62b091fA422e3F6fF9420aB76c2253d04C449E74` |
 | Helios amount | `400000` base units |
 | Atlas amount | `80000` base units |
 | Token | Moderato pathUSD |
 
 HTTP 402 is the expected challenge response. It is not an application failure and does not itself mean that a payment has been made.
 
-### MPP request and settlement sequence
+### MPP Request and Settlement Sequence
 
-The implemented merchant route is:
+The merchant route is:
 
 ```text
 GET /api/mpp/$resource
@@ -302,21 +377,21 @@ The sequence is:
 
 A challenge expires after five minutes. A missing, expired, mismatched, or already redeemed challenge is rejected.
 
-### Payment Authorization format
+### Payment Authorization Format
 
 The route expects a Tempo Payment Authorization header with:
 
 - `method="tempo"`
-- a 32-byte transaction hash in `txHash`
-- the resource-specific `challengeId`
+- A 32-byte transaction hash in `txHash`
+- The resource-specific `challengeId`
 
 The parser rejects malformed headers, duplicate parameters, invalid transaction hashes, and challenge IDs that do not match the requested resource.
 
-Do not invent a successful Payment Authorization header or reuse a transaction hash from another challenge. A valid header must refer to an actual on-chain transaction that satisfies the challenge.
+A valid header must refer to an actual on-chain transaction that satisfies the challenge.
 
 ## Relayer API
 
-The server exposes a protected Relayer endpoint:
+The protected endpoint is:
 
 ```text
 /api/relayer/action
@@ -326,7 +401,7 @@ Both GET and POST require the configured Bearer authorization credential. POST r
 
 Never place the Relayer API credential in browser code, public examples, screenshots, or source control.
 
-### GET — read live contract state
+### GET — Read Live Contract State
 
 ```http
 GET /api/relayer/action
@@ -351,7 +426,7 @@ The GET handler reads the configured Moderato RPC and returns:
 
 The GET handler is read-only. It does not submit a blockchain transaction.
 
-### POST — execute a challenge payment
+### POST — Execute a Challenge Payment
 
 The POST handler accepts the `pay_challenge` action.
 
@@ -370,7 +445,7 @@ Content-Type: application/json
 }
 ```
 
-Use a real, unexpired challenge ID returned by the MPP endpoint. The example above is a shape illustration, not a valid challenge.
+Use a real, unexpired challenge ID returned by the MPP endpoint. The example above is illustrative only.
 
 Before submitting a transaction, the Relayer checks:
 
@@ -389,27 +464,27 @@ The Relayer then simulates `MandateBook.pay()`, submits the transaction, waits f
 
 The POST handler has an in-process in-flight guard for concurrent requests using the same challenge ID. The contract's on-chain `settledMemos` mapping is the durable duplicate-settlement protection.
 
-#### POST response codes
+### POST Response Codes
 
-The following table reflects the current implementation in `src/routes/api/relayer/action.ts` and `src/lib/mpp/relayer-auth.ts`.
+The following table describes the documented implementation behavior.
 
 | HTTP status | Outcome / condition | Meaning |
 |---|---|---|
 | `200` | `confirmed` | Payment transaction succeeded and the expected `Paid` event and `settledMemos` state were verified |
-| `400` | Invalid request / validation error | Invalid JSON body, unsupported action, invalid challenge ID, expired challenge, chain/contract/token/resource/merchant/amount mismatch, or a contract policy revert detected before broadcast |
+| `400` | Invalid request / validation error | Invalid JSON body, unsupported action, invalid challenge ID, expired challenge, configuration mismatch, or a policy revert detected before broadcast |
 | `401` | Unauthorized | Missing or invalid Bearer authorization credential |
 | `403` | Forbidden | Challenge mandate ID or expected spender does not match the configured Relayer |
 | `404` | Challenge not found | The challenge ID does not exist in challenge storage |
-| `409` | Conflict | The challenge is already being processed or its memo is already settled on-chain |
+| `409` | Conflict | Challenge is already being processed or its memo is already settled on-chain |
 | `429` | Rate limited | The Relayer POST request exceeded the configured shared rate limit |
 | `502` | `reverted` | A broadcast transaction was mined with a reverted receipt |
-| `502` | `verification_failed` | The transaction succeeded, but the expected `MandateBook.Paid` event or `settledMemos` state could not be verified |
-| `202` | `unknown` | A transaction hash exists, but confirmation or verification is unavailable; inspect the transaction before retrying |
-| `503` | Service unavailable / unknown | Relayer configuration is unavailable, an error occurred before a transaction hash was obtained, or the server could not determine whether submission occurred |
+| `502` | `verification_failed` | The transaction succeeded, but the expected event or memo state could not be verified |
+| `202` | `unknown` | A transaction hash exists, but confirmation or verification is unavailable |
+| `503` | Service unavailable / unknown | Relayer configuration is unavailable or submission outcome cannot be determined |
 
 The GET endpoint also requires Bearer authorization. It returns `401` for missing or invalid authorization and `503` if the live state cannot be retrieved.
 
-**Important transaction handling:**
+Important transaction handling:
 
 - A `202` response means the transaction was broadcast. It does not mean the transaction failed.
 - A `502 / reverted` response means a transaction was mined and reverted. Check its transaction hash and receipt.
@@ -419,7 +494,7 @@ The GET endpoint also requires Bearer authorization. It returns `401` for missin
 
 The POST route submits a real testnet transaction when successfully invoked. Do not call it casually against a live challenge.
 
-## On-chain spending policy
+## On-Chain Spending Policy
 
 Finance funds the shared TIP-20 treasury and configures mandates. An agent can spend only through the mandate's authorized spender address.
 
@@ -436,12 +511,12 @@ The contract checks the following conditions during `pay()`:
 | Merchant is not allowlisted | `MerchantNotAllowed` |
 | Amount is zero | `ZeroAmount` |
 | Amount exceeds `maxPerTx` | `PerTxLimitExceeded` |
-| Challenge memo has already settled for the mandate | `ChallengeAlreadySettled` |
+| Challenge memo has already settled | `ChallengeAlreadySettled` |
 | Lifetime remaining allowance is insufficient | `CapExceeded` |
 | Rate limit would be exceeded | `RateLimited` |
 | Actual treasury balance cannot cover reserved obligations and payment | `InsufficientTreasury` |
 
-The contract also validates inputs and privileged operations. Relevant additional errors include:
+Additional validation and authorization errors include:
 
 | Condition | Revert |
 |---|---|
@@ -455,9 +530,9 @@ The contract also validates inputs and privileged operations. Relevant additiona
 | Rate limit configured with a zero-length window | `InvalidWindow` |
 | Treasury withdrawal would consume reserved funds | `ExceedsUnencumberedBalance` |
 
-The contract contains additional mandate and treasury validation errors. The Solidity source is authoritative for the complete current error definitions.
+The Solidity source is authoritative for the complete current error definitions.
 
-### Treasury reservation model
+### Treasury Reservation Model
 
 `remaining` is a policy allowance backed by the shared TIP-20 treasury. It is not a separate escrow balance.
 
@@ -465,210 +540,67 @@ When a mandate is issued, its spending cap is reserved against the treasury's un
 
 Treasury withdrawals are limited to unencumbered funds. A spender cannot withdraw treasury funds.
 
-### Replay protection
+## Security Considerations
 
-Each payment includes a 32-byte memo derived from the MPP challenge ID.
+- Keep treasury administration separate from agent spending authority.
+- Use a dedicated Relayer account with only the required permissions.
+- Keep Relayer private keys and API credentials server-side.
+- Do not expose secrets to browser clients.
+- Do not authorize merchants by trusting client-supplied values.
+- Validate challenge configuration against server-side resource configuration.
+- Verify transaction receipts and `Paid` events before delivering paid resources.
+- Check `settledMemos` before accepting a payment.
+- Do not retry a transaction with an unknown broadcast outcome until its original transaction has been checked.
+- Keep the merchant allowlist fail-closed.
+- Do not withdraw reserved treasury funds.
+- Do not confuse Tempo Mainnet with Tempo Moderato testnet.
+- Do not treat a successful HTTP 402 challenge as proof of settlement.
 
-The contract records:
+## Evidence and Reproducibility
 
-```solidity
-settledMemos[mandateId][memo]
-```
+The successful Helios E2E evidence was archived on the deployment server.
 
-A second payment using the same mandate and memo reverts with `ChallengeAlreadySettled`.
-
-The server also checks transaction hashes and challenge IDs against its redemption records and uses an atomic database commit to prevent concurrent duplicate redemption.
-
-These protections operate at different layers:
-
-- On-chain `settledMemos`: prevents duplicate settlement for a mandate and memo.
-- Server redemption records: prevents reusing a transaction hash or challenge ID across HTTP verification attempts.
-- Relayer in-flight guard: prevents simultaneous duplicate processing inside one server process.
-
-## MPP settlement model
-
-The on-chain payment operation is:
-
-```solidity
-pay(uint256 id, address merchant, uint128 amount, bytes32 memo)
-```
-
-The contract calls the configured TIP-20 token's:
-
-```solidity
-transferWithMemo(merchant, amount, memo)
-```
-
-The memo links the on-chain payment to the original HTTP payment challenge.
-
-The MPP verifier checks:
-
-1. Challenge chain ID and contract binding.
-2. Challenge memo derivation.
-3. Challenge expiration.
-4. Whether the transaction hash or challenge ID was already redeemed.
-5. RPC chain ID.
-6. Transaction receipt status.
-7. A matching `MandateBook.Paid` event emitted by the configured contract.
-8. Exact mandate ID, spender, merchant, token, amount, and memo.
-9. On-chain `settledMemos` state.
-10. Atomic database redemption and receipt persistence.
-
-Only after these checks succeed does the merchant route return the protected resource.
-
-## Verification boundary
-
-The following production checks were completed:
-
-- V2 contract deployment and address identification.
-- V2 configuration and Mandate #1 read-only state.
-- Treasury reservation and unencumbered balance read-only checks.
-- Helios and Atlas HTTP 402 challenge responses.
-- Protected Relayer GET endpoint returning live V2 state.
-
-The following has **not** yet been confirmed as a complete production end-to-end test:
-
-- A real MPP challenge payment submitted through the production Relayer POST endpoint.
-- Successful on-chain settlement for that challenge.
-- Successful second merchant request with Payment Authorization.
-- HTTP 200 delivery of the paid resource and a verified `Payment-Receipt`.
-
-Do not describe the project as having completed a successful production payment E2E until that full sequence has been observed.
-
-## Historical V1 deployment
-
-The original V1 contract remains a historical deployment.
-
-| Property | Value |
-|---|---|
-| Contract | MandateBook V1 |
-| Network | Tempo Moderato Testnet |
-| Chain ID | `42431` |
-| Historical contract address | `0xbe8731569E5A5460C1a27bd5DAA280157b3eD353` |
-| Historical owner | `0xc97d95982AD8E3DaC45b3A14402745096E2dA206` |
-
-V1 is not the active V2 contract.
-
-The V1 deployment, owner, historical data, and existing balance have been preserved. V1 funds and mandate state have not been migrated into V2.
-
-Do not confuse the V1 contract address with the current V2 deployment.
-
-## Repository layout
+Archive:
 
 ```text
-contracts/
-  src/
-    MandateBook.sol
-    interfaces/
-      ITIP20.sol
-  script/
-    DeployModerato.s.sol
-  test/
-    MandateBook.t.sol
-  README.md
-
-sdk/
-  ABI fragments and Tempo constants
-
-src/
-  lib/
-    mpp/
-      Challenge persistence, authorization, verification
-    tempo/
-      Tempo configuration and browser policy logic
-  routes/
-    api/
-      mpp/
-      relayer/
-  components/
-    Finance console
+/tmp/mandate-helios-e2e-evidence-20261125.tar.gz
 ```
 
-The browser policy engine is a local demonstration of the Solidity spending rules. The deployed contract is the authoritative on-chain policy.
+SHA-256:
 
-## Tests
-
-### Browser policy engine
-
-```bash
-node --experimental-strip-types --test src/lib/tempo/mandate.test.ts
+```text
+722851a2a80df686ea94f1de23ae44ac82c55be7674f348023426a400637226a
 ```
 
-### MPP and API tests
+The archive contains:
 
-The repository includes focused tests for MPP challenge configuration, Payment Authorization parsing, Relayer authorization, and on-chain payment verification.
+- `challenge.json`
+- `challenge.headers`
+- `payment.json`
+- `payment.headers`
+- `delivery.json`
+- `delivery.headers`
+- `EVIDENCE.md`
 
-Run the project's configured test commands from the repository root. Check `package.json` for the current scripts.
+The archive is server-side evidence, not a repository file.
 
-### Solidity contract tests
+## Verification Status
 
-Requires Foundry and Solidity 0.8.24.
+Verified on Tempo Moderato testnet:
 
-```bash
-cd contracts
-forge test -vvv
-```
+- V2 contract deployment and address.
+- Mandate #1 configuration.
+- Historical treasury reservation and unencumbered balance through read-only contract queries.
+- Helios and Atlas HTTP 402 challenge responses.
+- Protected Relayer GET response with live V2 state.
+- Real Helios payment transaction confirmed on-chain.
+- Relayer confirmation of the transaction.
+- Successful merchant-side verification of the matching challenge and on-chain payment.
+- Successful HTTP 200 paid-resource response.
+- Successful `Payment-Receipt` response header.
 
-The Solidity suite covers:
-
-- Spender authorization and merchant allowlisting.
-- Lifetime spending caps and per-transaction limits.
-- Rate limits and window resets.
-- Pause, unpause, and close behavior.
-- Validity windows and expired mandates.
-- Treasury deposits, withdrawals, and reserved-balance protection.
-- Mandate top-ups and reservation accounting.
-- Ownership transfer and delegated role behavior.
-- Zero-address and invalid-parameter validation.
-- Failed token transfer behavior.
-- Reentrant token callback rejection.
-- Duplicate challenge memo settlement prevention.
-
-The test suite uses a mock TIP-20 token. Passing unit tests do not by themselves prove that the production RPC, deployed token, database, Relayer, and merchant endpoints have completed a real payment E2E.
-
-## Deployment notes
-
-The current V2 deployment is already deployed to Tempo Moderato.
-
-The deployment command below is provided for reproducibility and future deployments. It is not a request to redeploy the existing contract.
-
-```bash
-cd contracts
-
-forge script script/DeployModerato.s.sol:DeployMandateBookModerato \
-  --rpc-url https://rpc.moderato.tempo.xyz \
-  --tempo.fee-token 0x20c0000000000000000000000000000000000000 \
-  --broadcast \
-  --verify
-```
-
-Set `DEPLOYER_PRIVATE_KEY` in the process environment before broadcasting. Never commit private keys or `.env` files.
-
-The deployer becomes the contract owner. Review the script, constructor arguments, role configuration, and deployment parameters before using it.
-
-Do not run a deployment command merely to update documentation.
-
-## Technology stack
-
-- React 19
-- TanStack Start
-- Tailwind CSS 4
-- Solidity 0.8.24
-- Foundry
-- Tempo TIP-20
-- Machine Payments Protocol (MPP)
-- viem
-
-## Security notes
-
-- Never commit private keys, seed phrases, API keys, or production environment files.
-- Keep the Relayer credential server-side.
-- Do not expose the Relayer private key to browser clients.
-- Do not assume an HTTP 402 challenge represents a completed payment.
-- Do not retry an unknown transaction outcome until the original transaction has been checked.
-- Do not confuse the browser simulation with live contract state.
-- Do not confuse Tempo Mainnet with Tempo Moderato testnet.
+The verified E2E result proves one successful Helios payment path on Tempo Moderato testnet. It does not prove Mainnet deployment, production-scale reliability, or independent customer adoption.
 
 ## License
 
-[`contracts/src/MandateBook.sol`](contracts/src/MandateBook.sol) is licensed under Apache-2.0.
+[`MandateBook.sol`](contracts/src/MandateBook.sol) is licensed under Apache-2.0.
