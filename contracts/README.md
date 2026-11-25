@@ -532,6 +532,8 @@ The protected endpoint is:
 
 Both GET and POST require the configured Bearer authorization credential.
 
+POST requests are rate-limited. Responses use no-store cache headers.
+
 ### GET — read-only live state
 
 GET reads the configured Moderato RPC and returns:
@@ -579,19 +581,33 @@ Before submission, the Relayer checks:
 
 The Relayer simulates `pay()`, submits the transaction, waits for its receipt, verifies the `Paid` event, and checks `settledMemos`.
 
-Possible response outcomes include:
+### POST response codes
 
-| HTTP status / outcome | Meaning |
-|---|---|
-| `200` / `confirmed` | Payment succeeded and the expected event and memo state were verified |
-| `400` / `reverted` | Validation or contract policy prevented payment |
-| `404` | Challenge not found |
-| `409` | Challenge payment already in progress or already settled |
-| `202` / `unknown` | Transaction was broadcast but confirmation or verification is unavailable |
-| `429` | Rate limit exceeded |
-| `503` | Relayer could not complete or determine the operation |
+The following table reflects the current implementation in `src/routes/api/relayer/action.ts` and `src/lib/mpp/relayer-auth.ts`.
 
-A `202` / `unknown` result must be investigated using the transaction hash and on-chain state before another payment attempt.
+| HTTP status | Outcome / condition | Meaning |
+|---|---|---|
+| `200` | `confirmed` | Payment succeeded and the expected event and memo state were verified |
+| `400` | Invalid request / validation error | Invalid JSON body, unsupported action, invalid challenge ID, expired challenge, chain/contract/token/resource/merchant/amount mismatch, or a contract policy revert detected before broadcast |
+| `401` | Unauthorized | Missing or invalid Bearer authorization credential |
+| `403` | Forbidden | Challenge mandate ID or expected spender does not match the configured Relayer |
+| `404` | Challenge not found | The challenge ID does not exist in challenge storage |
+| `409` | Conflict | Challenge payment is already in progress or its memo is already settled on-chain |
+| `429` | Rate limited | The Relayer POST request exceeded the configured shared rate limit |
+| `502` | `reverted` | A broadcast transaction was mined with a reverted receipt |
+| `502` | `verification_failed` | The transaction succeeded, but the expected `MandateBook.Paid` event or `settledMemos` state could not be verified |
+| `202` | `unknown` | Transaction was broadcast but confirmation or verification is unavailable |
+| `503` | Service unavailable / unknown | Relayer configuration is unavailable, an error occurred before a transaction hash was obtained, or the server could not determine whether submission occurred |
+
+The GET endpoint also requires Bearer authorization. It returns `401` for missing or invalid authorization and `503` if the live state cannot be retrieved.
+
+**Important transaction handling:**
+
+- A `202` response means the transaction was broadcast. It does not mean the transaction failed.
+- A `502 / reverted` response means a transaction was mined and reverted. Check its transaction hash and receipt.
+- A `502 / verification_failed` response means the transaction succeeded, but the application could not verify the expected event or memo state. Do not submit another payment blindly.
+- A `503` response can represent an uncertain submission outcome. Check server logs and on-chain state before retrying.
+- A `400` policy revert detected before broadcast does not represent a successful payment.
 
 POST submits a real testnet transaction when successfully invoked. It is not a read-only endpoint.
 
