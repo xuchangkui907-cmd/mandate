@@ -1,5 +1,7 @@
 # Mandate
 
+My Email:   xuchangkui907@gmail.com
+
 Policy wallets for the agent economy, built for the Tempo track at [Crypto World's Fair](https://colosseum.com/worldsfair).
 
 Companies issue spend mandates. Agents pay APIs over the [Machine Payments Protocol](https://mpp.dev). Finance sees a ledger, not fifty hot wallets.
@@ -131,3 +133,5 @@ React 19, TanStack Start, Tailwind 4. Contract: Solidity 0.8.24, Foundry, `via_i
 ## License
 
 [`contracts/src/MandateBook.sol`](contracts/src/MandateBook.sol) is Apache-2.0.
+
+My Email:   xuchangkui907@gmail.com
