@@ -13,7 +13,14 @@ import {MandateBook} from "../src/MandateBook.sol";
 ///      forge script script/Deploy.s.sol:DeployScript --rpc-url $TEMPO_RPC --broadcast
 ///      RPC: see https://docs.tempo.xyz (mainnet chainId 4217).
 contract DeployScript is Script {
+    uint256 constant TEMPO_MAINNET_CHAIN_ID = 4217;
+
     function run() external returns (MandateBook book) {
+        require(
+            block.chainid == TEMPO_MAINNET_CHAIN_ID,
+            "Wrong network: expected Tempo Mainnet (4217)"
+        );
+
         vm.startBroadcast();
         book = new MandateBook(msg.sender);
         vm.stopBroadcast();

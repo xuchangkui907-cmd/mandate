@@ -89,6 +89,31 @@ export const MERCHANTS = {
   },
 } as const;
 
+
+export const MPP_RESOURCES = {
+  helios: {
+    id: "helios",
+    name: "Helios Research API",
+    priceMicro: MERCHANTS.helios.priceMicro,
+    merchantEnvKey: "MERCHANT_HELIOS_ADDRESS",
+  },
+  atlas: {
+    id: "atlas",
+    name: "Atlas Render API",
+    priceMicro: MERCHANTS.atlas.priceMicro,
+    merchantEnvKey: "MERCHANT_ATLAS_ADDRESS",
+  },
+  shadow: {
+    id: "shadow",
+    name: "Shadow LLM API",
+    priceMicro: MERCHANTS.shadow.priceMicro,
+    merchantEnvKey: "MERCHANT_SHADOW_ADDRESS",
+  },
+} as const;
+
+export type MppResourceId = keyof typeof MPP_RESOURCES;
+
+
 export type MerchantId = keyof typeof MERCHANTS;
 export type AgentId = keyof typeof AGENTS;
 

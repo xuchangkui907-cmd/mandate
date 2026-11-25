@@ -16,7 +16,7 @@ Machine Payments Protocol: an agent requests a paid resource, the merchant retur
 
 `pay(id, merchant, amount, memo)` is that on-chain step. `memo` is the 32-byte MPP challenge id. Settlement uses TIP-20 `transferWithMemo`, which rides Tempo payment lanes (reserved blockspace, ~0.6s finality, fees in USD TIP-20). The book checks the mandate (spender, window, cap, allowlist) before moving funds; the agent key cannot withdraw the treasury.
 
-## Tempo addresses (mainnet, same on testnet)
+## Tempo network addresses
 
 | Name | Address |
 | --- | --- |
@@ -24,13 +24,15 @@ Machine Payments Protocol: an agent requests a paid resource, the merchant retur
 | pathUSD | `0x20c0000000000000000000000000000000000000` |
 | Fee Manager | `0xfeec000000000000000000000000000000000000` |
 
-TIP-20 decimals are always 6. Chain id 4217. No native gas token.
+TIP-20 decimals are always 6. Tempo Mainnet chain ID is 4217; Tempo Moderato testnet chain ID is 42431. No native gas token.
 
 ## 16-day deploy notes
 
 Day 1: `forge test -vvv`. Confirm empty-allowlist fail-closed and MPP memo passthrough.
 
-Days 2-3: Deploy to Tempo testnet with `forge script script/Deploy.s.sol:DeployScript --rpc-url $TEMPO_RPC --broadcast`. Fund the deployer with test pathUSD (fees + treasury). Record the MandateBook address.
+Days 2-3: Deploy to Tempo Moderato testnet (chain ID 42431) with `forge script script/DeployModerato.s.sol:DeployMandateBookModerato --rpc-url https://rpc.moderato.tempo.xyz --broadcast`. Set `DEPLOYER_PRIVATE_KEY` in the process environment. Optionally set `DEMO_SEED_DEPOSIT` to seed the demo treasury and create Mandate #1. Record the deployed MandateBook address.
+
+For Tempo Mainnet (chain ID 4217), use `script/Deploy.s.sol:DeployScript` with the mainnet RPC. The mainnet script rejects any other chain ID.
 
 Days 4-6: Finance flow: `deposit(pathUSD, amount)`, `issue(...)`, `setMerchant`. Point the agent spender key at the issued id. Wire the SDK (`encodeIssue`, `encodePay`) to the 402 handler.
 

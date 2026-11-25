@@ -6,9 +6,9 @@ import { fileURLToPath } from "node:url";
 import test from "node:test";
 import {
   appNameFromHost,
-  createHeadInjector,
+  createHeadInjector as createHeadInjectorRaw,
   grokXCreatorHeadTags,
-  injectGrokPwaHead,
+  injectGrokPwaHead as injectGrokPwaHeadRaw,
   isDocumentPath,
   isInstallQuery,
   publicAppHost,
@@ -17,6 +17,14 @@ import {
   snapshotOgIdentity,
   stripInstallParams,
 } from "./grok-pwa-shared.mjs";
+
+// Isolate default tests from the real workspace OG identity and image.
+const TEST_EMPTY_CWD = mkdtempSync(join(tmpdir(), "grok-pwa-isolated-"));
+const injectGrokPwaHead = (html, ctx = {}) =>
+  injectGrokPwaHeadRaw(html, { cwd: TEST_EMPTY_CWD, ...ctx });
+const createHeadInjector = (ctx = {}) =>
+  createHeadInjectorRaw({ cwd: TEST_EMPTY_CWD, ...ctx });
+
 import { renderInstallPage } from "./grok-pwa-plugin.mjs";
 
 const TEMPLATE_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");

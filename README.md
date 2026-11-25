@@ -101,15 +101,13 @@ Covered paths include an empty allowlist, a non-spender, pause, close, expiry, c
 
 There is no native gas token. Fees are paid in a USD TIP-20. Eligible transfers use payment lanes (reserved blockspace, about 0.6s finality). A `pay()` in this model is about 84k gas, near $0.001 at the fee cap. Transaction type `0x76` lets finance sponsor gas with `feePayer`, so the agent wallet can stay empty.
 
-Deploy and cast examples: [`contracts/README.md`](contracts/README.md). Use [Foundry for Tempo](https://tempo.xyz/developers/docs/sdk/foundry) when broadcasting. Pass `--tempo.fee-token` set to pathUSD. Do not put a private key in the repo.
+Deploy and cast examples: [`contracts/README.md`](contracts/README.md). Use [Foundry for Tempo](https://tempo.xyz/developers/docs/sdk/foundry) when broadcasting. Pass `--tempo.fee-token` set to pathUSD. Set DEPLOYER_PRIVATE_KEY in your shell environment before running the Moderato script. Do not put a private key in the repo.
 
 ```bash
 cd contracts
-forge script script/Deploy.s.sol:DeployScript \
+forge script script/DeployModerato.s.sol:DeployMandateBookModerato \
   --rpc-url https://rpc.moderato.tempo.xyz \
   --tempo.fee-token 0x20c0000000000000000000000000000000000000 \
-  --sender 0xYOUR_ADDRESS \
-  --interactive \
   --broadcast \
   --verify
 ```

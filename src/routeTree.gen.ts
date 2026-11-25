@@ -13,6 +13,8 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as ArchitectureRouteImport } from './routes/architecture'
 import { Route as ConsoleRouteImport } from './routes/console'
 import { Route as SubmitRouteImport } from './routes/submit'
+import { Route as ApiMppResourceRouteImport } from './routes/api/mpp/$resource'
+import { Route as ApiRelayerActionRouteImport } from './routes/api/relayer/action'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -34,18 +36,32 @@ const SubmitRoute = SubmitRouteImport.update({
   path: '/submit',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiMppResourceRoute = ApiMppResourceRouteImport.update({
+  id: '/api/mpp/$resource',
+  path: '/api/mpp/$resource',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiRelayerActionRoute = ApiRelayerActionRouteImport.update({
+  id: '/api/relayer/action',
+  path: '/api/relayer/action',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/architecture': typeof ArchitectureRoute
   '/console': typeof ConsoleRoute
   '/submit': typeof SubmitRoute
+  '/api/mpp/$resource': typeof ApiMppResourceRoute
+  '/api/relayer/action': typeof ApiRelayerActionRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/architecture': typeof ArchitectureRoute
   '/console': typeof ConsoleRoute
   '/submit': typeof SubmitRoute
+  '/api/mpp/$resource': typeof ApiMppResourceRoute
+  '/api/relayer/action': typeof ApiRelayerActionRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -53,13 +69,34 @@ export interface FileRoutesById {
   '/architecture': typeof ArchitectureRoute
   '/console': typeof ConsoleRoute
   '/submit': typeof SubmitRoute
+  '/api/mpp/$resource': typeof ApiMppResourceRoute
+  '/api/relayer/action': typeof ApiRelayerActionRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/architecture' | '/console' | '/submit'
+  fullPaths:
+    | '/'
+    | '/architecture'
+    | '/console'
+    | '/submit'
+    | '/api/mpp/$resource'
+    | '/api/relayer/action'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/architecture' | '/console' | '/submit'
-  id: '__root__' | '/' | '/architecture' | '/console' | '/submit'
+  to:
+    | '/'
+    | '/architecture'
+    | '/console'
+    | '/submit'
+    | '/api/mpp/$resource'
+    | '/api/relayer/action'
+  id:
+    | '__root__'
+    | '/'
+    | '/architecture'
+    | '/console'
+    | '/submit'
+    | '/api/mpp/$resource'
+    | '/api/relayer/action'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -67,6 +104,8 @@ export interface RootRouteChildren {
   ArchitectureRoute: typeof ArchitectureRoute
   ConsoleRoute: typeof ConsoleRoute
   SubmitRoute: typeof SubmitRoute
+  ApiMppResourceRoute: typeof ApiMppResourceRoute
+  ApiRelayerActionRoute: typeof ApiRelayerActionRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -99,6 +138,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SubmitRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/mpp/$resource': {
+      id: '/api/mpp/$resource'
+      path: '/api/mpp/$resource'
+      fullPath: '/api/mpp/$resource'
+      preLoaderRoute: typeof ApiMppResourceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/relayer/action': {
+      id: '/api/relayer/action'
+      path: '/api/relayer/action'
+      fullPath: '/api/relayer/action'
+      preLoaderRoute: typeof ApiRelayerActionRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -107,6 +160,8 @@ const rootRouteChildren: RootRouteChildren = {
   ArchitectureRoute: ArchitectureRoute,
   ConsoleRoute: ConsoleRoute,
   SubmitRoute: SubmitRoute,
+  ApiMppResourceRoute: ApiMppResourceRoute,
+  ApiRelayerActionRoute: ApiRelayerActionRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

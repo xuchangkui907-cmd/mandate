@@ -3,26 +3,16 @@ pragma solidity ^0.8.24;
 
 import {ITIP20} from "./interfaces/ITIP20.sol";
 
-/// @title MandateBook
-/// @notice Policy-bound spend authorization on Tempo. Finance deposits TIP-20
-///         stablecoins into this contract; each Mandate is a spend policy
-///         (who can pay, how much, to which merchants, until when, at what
-///         rate). Agents never hold treasury keys — they only call `pay`.
-/// @dev Why Tempo:
-///      - Stablecoin gas: no native token; fees are USD TIP-20 via the Fee
-///        Manager at 0xfeec000000000000000000000000000000000000.
-///      - Payment lanes: TIP-20 transfers get reserved blockspace, so agent
-///        payments are not crowded out by other traffic.
-///      - ~0.6s finality: fast enough for synchronous MPP (HTTP 402 challenge
-///        → on-chain pay with memo = challenge id → receipt).
-///      - `transferWithMemo` is the settlement primitive; empty merchant
-///        allowlist is fail-closed (cannot pay anyone).
+/// @title MandateBook v2
+/// @notice Policy-bound spend authorization on Tempo with enterprise treasury
+///         isolation, challenge replay protection, per-tx caps, and RBAC.
 contract MandateBook {
     struct Mandate {
         address spender;
         address token;
         uint128 spendMax;
         uint128 remaining;
+        uint128 maxPerTx;
         uint64 validAfter;
         uint64 validUntil;
         uint128 rateLimit;
@@ -34,51 +24,62 @@ contract MandateBook {
         bytes32 department;
     }
 
-    /// @notice Finance owner. Holds the treasury keys; issues and revokes policy.
     address public owner;
-
-    /// @notice Next mandate id. Starts at 1; id 0 is never valid.
+    address public treasuryAdmin;
+    address public emergencyGuardian;
+    mapping(address => bool) public policyOperators;
     uint256 public nextId;
-
     mapping(uint256 => Mandate) public mandates;
-
-    /// @notice Per-mandate merchant allowlist. Empty (count == 0) is fail-closed.
     mapping(uint256 => mapping(address => bool)) public allowlisted;
-
     mapping(uint256 => uint256) public allowlistCount;
-
-    /// @dev Simple nonReentrant mutex. 0 = free, 1 = locked.
+    mapping(uint256 => mapping(bytes32 => bool)) public settledMemos;
+    mapping(address => uint256) public reservedByToken;
     uint256 private _guard;
 
     error UnknownMandate();
     error NotOwner();
+    error NotTreasuryAdmin();
+    error NotPolicyOperator();
+    error NotGuardianOrOperator();
     error NotSpender();
+    error ZeroAddress();
     error MandatePaused();
     error MandateClosed();
     error MandateNotYetValid();
     error MandateExpired();
     error MerchantNotAllowed();
     error CapExceeded();
+    error PerTxLimitExceeded();
     error RateLimited();
+    error ChallengeAlreadySettled();
     error InsufficientTreasury();
+    error ExceedsUnencumberedBalance();
     error ZeroAmount();
     error InvalidWindow();
     error InvalidSpendMax();
+    error InvalidValidityRange();
+
+    event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
+    event TreasuryAdminSet(address indexed admin);
+    event EmergencyGuardianSet(address indexed guardian);
+    event PolicyOperatorSet(address indexed operator, bool enabled);
 
     event Issued(
         uint256 indexed id,
         address indexed spender,
         address indexed token,
         uint128 spendMax,
+        uint128 maxPerTx,
         uint64 validAfter,
         uint64 validUntil,
         uint128 rateLimit,
         uint32 window,
         bytes32 department
     );
+    event ToppedUp(uint256 indexed id, uint128 addedAmount, uint128 newRemaining);
     event MerchantSet(uint256 indexed id, address indexed merchant, bool allowed);
-    event Paused(uint256 indexed id, bool paused);
-    event Closed(uint256 indexed id);
+    event Paused(uint256 indexed id, bool paused, address indexed actor);
+    event Closed(uint256 indexed id, uint128 releasedAmount);
     event Paid(
         uint256 indexed id,
         address indexed spender,
@@ -96,6 +97,27 @@ contract MandateBook {
         _;
     }
 
+    modifier onlyTreasuryAdmin() {
+        if (msg.sender != treasuryAdmin && msg.sender != owner) revert NotTreasuryAdmin();
+        _;
+    }
+
+    modifier onlyOperator() {
+        if (!policyOperators[msg.sender] && msg.sender != owner) revert NotPolicyOperator();
+        _;
+    }
+
+    modifier onlyGuardianOrOperator() {
+        if (
+            msg.sender != emergencyGuardian &&
+            !policyOperators[msg.sender] &&
+            msg.sender != owner
+        ) {
+            revert NotGuardianOrOperator();
+        }
+        _;
+    }
+
     modifier nonReentrant() {
         if (_guard != 0) revert();
         _guard = 1;
@@ -103,71 +125,118 @@ contract MandateBook {
         _guard = 0;
     }
 
-    /// @notice Set finance as the sole owner of the book and its treasury.
-    /// @param owner_ Finance address. Must be non-zero.
     constructor(address owner_) {
-        if (owner_ == address(0)) revert NotOwner();
+        if (owner_ == address(0)) revert ZeroAddress();
         owner = owner_;
+        treasuryAdmin = owner_;
+        emergencyGuardian = owner_;
+        policyOperators[owner_] = true;
         nextId = 1;
+
+        emit OwnershipTransferred(address(0), owner_);
+        emit TreasuryAdminSet(owner_);
+        emit EmergencyGuardianSet(owner_);
+        emit PolicyOperatorSet(owner_, true);
     }
 
-    /// @notice Pull TIP-20 from finance into the shared treasury.
-    /// @dev Pooled funds: mandate `remaining` is a policy cap, not an escrow.
-    ///      Uses `transferFrom` (finance must approve this contract).
-    /// @param token TIP-20 token (decimals always 6 on Tempo).
-    /// @param amount Base units to deposit.
-    function deposit(address token, uint256 amount) external onlyOwner nonReentrant {
+    function transferOwnership(address newOwner) external onlyOwner {
+        if (newOwner == address(0)) revert ZeroAddress();
+
+        address previousOwner = owner;
+        owner = newOwner;
+
+        if (treasuryAdmin == previousOwner) {
+            treasuryAdmin = newOwner;
+            emit TreasuryAdminSet(newOwner);
+        }
+
+        if (emergencyGuardian == previousOwner) {
+            emergencyGuardian = newOwner;
+            emit EmergencyGuardianSet(newOwner);
+        }
+
+        if (policyOperators[previousOwner]) {
+            policyOperators[previousOwner] = false;
+            emit PolicyOperatorSet(previousOwner, false);
+        }
+
+        if (!policyOperators[newOwner]) {
+            policyOperators[newOwner] = true;
+            emit PolicyOperatorSet(newOwner, true);
+        }
+
+        emit OwnershipTransferred(previousOwner, newOwner);
+    }
+
+    function setTreasuryAdmin(address admin) external onlyOwner {
+        if (admin == address(0)) revert ZeroAddress();
+        treasuryAdmin = admin;
+        emit TreasuryAdminSet(admin);
+    }
+
+    function setEmergencyGuardian(address guardian) external onlyOwner {
+        if (guardian == address(0)) revert ZeroAddress();
+        emergencyGuardian = guardian;
+        emit EmergencyGuardianSet(guardian);
+    }
+
+    function setPolicyOperator(address operator, bool enabled) external onlyOwner {
+        if (operator == address(0)) revert ZeroAddress();
+        policyOperators[operator] = enabled;
+        emit PolicyOperatorSet(operator, enabled);
+    }
+
+    function deposit(address token, uint256 amount) external onlyTreasuryAdmin nonReentrant {
+        if (token == address(0)) revert ZeroAddress();
         if (amount == 0) revert ZeroAmount();
         bool ok = ITIP20(token).transferFrom(msg.sender, address(this), amount);
         if (!ok) revert InsufficientTreasury();
         emit Deposited(token, amount, msg.sender);
     }
 
-    /// @notice Return TIP-20 from the treasury to finance.
-    /// @dev Close does not auto-refund; unused remaining is withdrawn here.
-    /// @param token TIP-20 token.
-    /// @param amount Base units to withdraw.
-    function withdraw(address token, uint256 amount) external onlyOwner nonReentrant {
+    function withdraw(address token, uint256 amount) external onlyTreasuryAdmin nonReentrant {
         if (amount == 0) revert ZeroAmount();
-        if (ITIP20(token).balanceOf(address(this)) < amount) revert InsufficientTreasury();
+        uint256 available = unencumberedBalance(token);
+        if (amount > available) revert ExceedsUnencumberedBalance();
         bool ok = ITIP20(token).transfer(msg.sender, amount);
         if (!ok) revert InsufficientTreasury();
         emit Withdrawn(token, amount, msg.sender);
     }
 
-    /// @notice Issue a spend policy. `remaining` starts at `spendMax`.
-    /// @dev Agent (`spender`) never receives treasury keys. `rateLimit` 0 means
-    ///      unlimited. Non-zero `rateLimit` requires a positive `window`.
-    /// @param spender Agent that may call `pay`.
-    /// @param token TIP-20 the mandate spends.
-    /// @param spendMax Lifetime cap in token base units.
-    /// @param validAfter Inclusive unix start.
-    /// @param validUntil Inclusive unix end.
-    /// @param rateLimit Max spent per `window` (0 = unlimited).
-    /// @param window Rate-limit window length in seconds.
-    /// @param department Opaque finance tag.
-    /// @return id Newly issued mandate id.
+    function unencumberedBalance(address token) public view returns (uint256) {
+        uint256 bal = ITIP20(token).balanceOf(address(this));
+        uint256 reserved = reservedByToken[token];
+        return bal > reserved ? bal - reserved : 0;
+    }
+
     function issue(
         address spender,
         address token,
         uint128 spendMax,
+        uint128 maxPerTx,
         uint64 validAfter,
         uint64 validUntil,
         uint128 rateLimit,
         uint32 window,
         bytes32 department
-    ) external onlyOwner returns (uint256 id) {
+    ) external onlyOperator returns (uint256 id) {
+        if (spender == address(0) || token == address(0)) revert ZeroAddress();
         if (spendMax == 0) revert InvalidSpendMax();
+        if (validUntil < validAfter) revert InvalidValidityRange();
         if (rateLimit > 0 && window == 0) revert InvalidWindow();
+        if (unencumberedBalance(token) < uint256(spendMax)) revert InsufficientTreasury();
 
         id = nextId;
         nextId = id + 1;
+
+        reservedByToken[token] += uint256(spendMax);
 
         Mandate storage m = mandates[id];
         m.spender = spender;
         m.token = token;
         m.spendMax = spendMax;
         m.remaining = spendMax;
+        m.maxPerTx = maxPerTx;
         m.validAfter = validAfter;
         m.validUntil = validUntil;
         m.rateLimit = rateLimit;
@@ -175,17 +244,34 @@ contract MandateBook {
         m.department = department;
 
         emit Issued(
-            id, spender, token, spendMax, validAfter, validUntil, rateLimit, window, department
+            id,
+            spender,
+            token,
+            spendMax,
+            maxPerTx,
+            validAfter,
+            validUntil,
+            rateLimit,
+            window,
+            department
         );
     }
 
-    /// @notice Add or remove a merchant from a mandate's allowlist.
-    /// @dev Empty allowlist is fail-closed: `pay` cannot succeed until at
-    ///      least one merchant is allowed.
-    /// @param id Mandate id.
-    /// @param merchant Recipient address.
-    /// @param allowed True to allow, false to revoke.
-    function setMerchant(uint256 id, address merchant, bool allowed) external onlyOwner {
+    function topUp(uint256 id, uint128 addedAmount) external onlyOperator {
+        if (addedAmount == 0) revert ZeroAmount();
+        Mandate storage m = _requireMandate(id);
+        if (m.closed) revert MandateClosed();
+        if (unencumberedBalance(m.token) < uint256(addedAmount)) revert InsufficientTreasury();
+
+        m.spendMax += addedAmount;
+        m.remaining += addedAmount;
+        reservedByToken[m.token] += uint256(addedAmount);
+
+        emit ToppedUp(id, addedAmount, m.remaining);
+    }
+
+    function setMerchant(uint256 id, address merchant, bool allowed) external onlyOperator {
+        if (merchant == address(0)) revert ZeroAddress();
         Mandate storage m = _requireMandate(id);
         if (m.closed) revert MandateClosed();
 
@@ -201,44 +287,34 @@ contract MandateBook {
         emit MerchantSet(id, merchant, allowed);
     }
 
-    /// @notice Freeze payments on a mandate. Treasury is untouched.
-    /// @param id Mandate id.
-    function pause(uint256 id) external onlyOwner {
+    function pause(uint256 id) external onlyGuardianOrOperator {
         Mandate storage m = _requireMandate(id);
         if (m.closed) revert MandateClosed();
         if (m.paused) return;
         m.paused = true;
-        emit Paused(id, true);
+        emit Paused(id, true, msg.sender);
     }
 
-    /// @notice Resume payments on a paused mandate.
-    /// @param id Mandate id.
-    function unpause(uint256 id) external onlyOwner {
+    function unpause(uint256 id) external onlyOperator {
         Mandate storage m = _requireMandate(id);
         if (m.closed) revert MandateClosed();
         if (!m.paused) return;
         m.paused = false;
-        emit Paused(id, false);
+        emit Paused(id, false, msg.sender);
     }
 
-    /// @notice Permanently close a mandate. Remaining is not refunded.
-    /// @dev Owner withdraws unused treasury separately. Close is one-way.
-    /// @param id Mandate id.
-    function close(uint256 id) external onlyOwner {
+    function close(uint256 id) external onlyOperator {
         Mandate storage m = _requireMandate(id);
         if (m.closed) revert MandateClosed();
         m.closed = true;
-        emit Closed(id);
+        uint128 released = m.remaining;
+        m.remaining = 0;
+        if (released > 0) {
+            reservedByToken[m.token] -= uint256(released);
+        }
+        emit Closed(id, released);
     }
 
-    /// @notice Spend under a mandate: TIP-20 `transferWithMemo` to `merchant`.
-    /// @dev `memo` is the MPP challenge id from the HTTP 402. Tempo payment
-    ///      lanes + ~0.6s finality make this safe to do inline with the retry
-    ///      that collects the receipt. `msg.sender` must be the spender.
-    /// @param id Mandate id.
-    /// @param merchant Allowlisted recipient.
-    /// @param amount Base units to send (TIP-20 decimals = 6).
-    /// @param memo MPP challenge id (bytes32).
     function pay(uint256 id, address merchant, uint128 amount, bytes32 memo) external nonReentrant {
         Mandate storage m = _requireMandate(id);
         if (m.closed) revert MandateClosed();
@@ -247,7 +323,9 @@ contract MandateBook {
         if (block.timestamp > m.validUntil) revert MandateExpired();
         if (msg.sender != m.spender) revert NotSpender();
         if (amount == 0) revert ZeroAmount();
+        if (m.maxPerTx > 0 && amount > m.maxPerTx) revert PerTxLimitExceeded();
         if (!allowlisted[id][merchant]) revert MerchantNotAllowed();
+        if (settledMemos[id][memo]) revert ChallengeAlreadySettled();
         if (m.remaining < amount) revert CapExceeded();
 
         if (m.rateLimit > 0) {
@@ -261,9 +339,14 @@ contract MandateBook {
         }
 
         uint256 bal = ITIP20(m.token).balanceOf(address(this));
-        if (bal < uint256(amount)) revert InsufficientTreasury();
+        uint256 totalReserved = reservedByToken[m.token];
+        if (bal < totalReserved || bal < uint256(amount)) {
+            revert InsufficientTreasury();
+        }
 
+        settledMemos[id][memo] = true;
         m.remaining = m.remaining - amount;
+        reservedByToken[m.token] -= uint256(amount);
         if (m.rateLimit > 0) {
             m.windowSpent = m.windowSpent + amount;
         }
